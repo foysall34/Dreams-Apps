@@ -1,0 +1,37 @@
+# chatbot/views.py
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+
+# আপনার dream_analyzer.py ফাইল থেকে মূল ফাংশনটি ইম্পোর্ট করুন
+from .dream_analyzer import merge_dream_interpretation
+
+class DreamInterpretationAPIView(APIView):
+    """
+    একটি API ভিউ যা ব্যবহারকারীর কাছ থেকে স্বপ্নের বর্ণনা নেয়
+    এবং একটি সমন্বিত ব্যাখ্যা প্রদান করে।
+    """
+    def post(self, request, *args, **kwargs):
+        # রিকোয়েস্টের বডি থেকে 'query' ডেটা নিন
+        user_query = request.data.get('query')
+
+        if not user_query:
+            return Response(
+                {"error": "Please provide a dream query."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # আপনার অ্যানালাইজার ফাংশনটি কল করুন
+            result = merge_dream_interpretation(user_query)
+            
+            # ফলাফলটিকে JSON হিসেবে ফেরত পাঠান
+            return Response(result, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            # অপ্রত্যাশিত কোনো এরর হলে
+            return Response(
+                {"error": f"An internal error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
