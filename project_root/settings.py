@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     # app 
     'myapp' ,
     'chatbot',
+    'accounts',
 
     # framework 
     'rest_framework',

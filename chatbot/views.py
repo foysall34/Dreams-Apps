@@ -40,7 +40,7 @@ class DreamInterpretationAPIView(APIView):
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .dream import dream_chatbot_json # আপনার dream.py থেকে ফাংশনটি ইম্পোর্ট করুন
+from .dream import dream_chatbot_json 
 
 class DreamInterpretationView(APIView):
     """
@@ -64,5 +64,4 @@ class DreamInterpretationView(APIView):
         if 'error' in result:
             return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # সফল হলে, ফলাফলটি JSON হিসেবে ফেরত পাঠান
         return Response(result, status=status.HTTP_200_OK)

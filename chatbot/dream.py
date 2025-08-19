@@ -1,14 +1,12 @@
-# api_app/dream.py
-
 import google.generativeai as genai
 import re
 import json
-from django.conf import settings # Django সেটিংস ইম্পোর্ট করুন
+from django.conf import settings 
 
 # Configure Gemini API using the key from settings.py
 try:
     genai.configure(api_key=settings.GEMINI_API_KEY)
-    MODEL_ID = "gemini-1.5-flash"  # অথবা আপনার পছন্দের মডেল
+    MODEL_ID = "gemini-1.5-flash"  # your wishable model use 
     model = genai.GenerativeModel(MODEL_ID)
     print("Gemini model configured successfully.")
 except AttributeError:
@@ -46,5 +44,5 @@ def dream_chatbot_json(user_query):
         return result
 
     except Exception as e:
-        # Gemini থেকে কোনো কারণে এরর আসলে বা JSON পার্স না হলে
+        # if gemini work properly , then give error message 
         return {"error": f"Failed to get or parse response: {str(e)}", "raw": raw_text if 'raw_text' in locals() else "No response text."}
