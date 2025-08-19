@@ -14,10 +14,19 @@ environ.Env.read_env(BASE_DIR / '.env')
 
 SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG')
-ALLOWED_HOSTS = []
+
+
+
+ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    '.trycloudflare.com',
+]
 
 GOOGLE_API_KEY = env('GOOGLE_API_KEY')
 SERPER_API_KEY = env('SERPER_API_KEY')
+GEMINI_API_KEY= env('GEMINI_API_KEY')
+
 # Application definition
 
 INSTALLED_APPS = [
