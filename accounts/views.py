@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
-from .serializers import UserRegisterSerializer, VerifyOTPSerializer, LoginSerializer
+from .serializers import UserRegisterSerializer, VerifyOTPSerializer, LoginSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer
 from .models import User
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -82,4 +82,50 @@ class LoginAPI(APIView):
                     return Response({"error": "Account not verified."}, status=status.HTTP_403_FORBIDDEN)
             else:
                 return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+
+class PasswordResetRequestAPI(APIView):
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            user = User.objects.get(email=email)
+            
+            # OTP জেনারেট এবং সেভ করুন
+            otp = str(random.randint(1000, 9999))
+            user.otp = otp
+            user.save()
+
+            # ইমেইলে OTP পাঠান
+            subject = 'Your Password Reset OTP'
+            message = f'Your OTP for password reset is: {otp}'
+            from_email = settings.EMAIL_HOST_USER
+            recipient_list = [user.email]
+            send_mail(subject, message, from_email, recipient_list)
+
+            return Response({
+                "message": "Password reset OTP has been sent to your email."
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordResetConfirmAPI(APIView):
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            password = serializer.validated_data['password']
+
+            user = User.objects.get(email=email)
+            
+            # নতুন পাসওয়ার্ড সেট করুন
+            user.set_password(password)
+            
+            # OTP ব্যবহারের পর মুছে ফেলুন (খুবই গুরুত্বপূর্ণ)
+            user.otp = None 
+            user.save()
+
+            return Response({"message": "Password has been reset successfully."}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
