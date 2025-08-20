@@ -6,7 +6,7 @@ from django.conf import settings
 # Configure Gemini API using the key from settings.py
 try:
     genai.configure(api_key=settings.GEMINI_API_KEY)
-    MODEL_ID = "gemini-1.5-flash"  # your wishable model use 
+    MODEL_ID = "gemini-2.5-flash"  # your wishable model use 
     model = genai.GenerativeModel(MODEL_ID)
     print("Gemini model configured successfully.")
 except AttributeError:
