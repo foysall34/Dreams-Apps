@@ -6,33 +6,32 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
-from .serializers import UserRegisterSerializer, VerifyOTPSerializer, LoginSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer
+from .serializers import ResendOTPSerializer,UserRegisterSerializer, VerifyOTPSerializer, LoginSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer
 from .models import User
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework import generics
+import random
+from datetime import timedelta
+from django.utils import timezone
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from .authentication import JWTAuthenticationAllowInactive 
 
-
-class RegisterAPI(APIView):
-    def post(self, request):
+class RegisterView(APIView):
+    permission_classes = [AllowAny] 
+    def post(self, request, *args, **kwargs):
         serializer = UserRegisterSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
 
-            # OTP জেনারেট এবং সেভ করুন
-            otp = str(random.randint(1000, 9999))
-            user.otp = otp
-            user.save()
+        # Register এর সময় email কে session এ রাখবো
+        request.session['pending_email'] = user.email  
 
-            # ইমেইলে OTP পাঠান
-            subject = 'Your OTP for account verification'
-            message = f'Your OTP is: {otp}'
-            from_email = settings.EMAIL_HOST_USER
-            recipient_list = [user.email]
-            send_mail(subject, message, from_email, recipient_list)
+        return Response(
+            {"detail": "User registered successfully. Please verify OTP."}, 
+            status=201
+        )
 
-            return Response({
-                "message": "Registration successful! Please check your email for OTP."
-            }, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class VerifyOTPAPI(APIView):
     def post(self, request):
@@ -129,3 +128,24 @@ class PasswordResetConfirmAPI(APIView):
 
             return Response({"message": "Password has been reset successfully."}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+
+
+
+
+
+
+
+
+
+# For resend api 
+class ResendOTPView(APIView):
+    permission_classes = [AllowAny] 
+
+    def post(self, request, *args, **kwargs):
+        serializer = ResendOTPSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "OTP resent successfully."}, status=200)
+
