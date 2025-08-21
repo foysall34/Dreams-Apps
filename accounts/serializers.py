@@ -5,7 +5,7 @@ import random
 from datetime import timedelta
 from django.utils import timezone
 from django.core.mail import send_mail
-
+from django.contrib.auth import get_user_model
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
@@ -75,43 +75,114 @@ class LoginSerializer(serializers.Serializer):
 
 
 
+# ************************************forget password ***********************
+User = get_user_model()
 
 class PasswordResetRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    """
+    Serializer for initiating a password reset request.
+    Validates that the provided email exists in the system.
+    """
+    email = serializers.EmailField(
+        max_length=254,  # standard max length for email
+        required=True,
+        help_text="Enter the email address associated with your account."
+    )
 
     def validate_email(self, value):
+        """
+        Validates that a user with the provided email exists.
+        """
+        if not User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("User with this email does not exist.")
+        return value
+
+class ResendOTPSerializer(serializers.Serializer):
+    """
+    Serializer for resending the OTP for password reset.
+    Validates that the provided email exists in the system.
+    """
+    email = serializers.EmailField(
+        max_length=254,
+        required=True,
+        help_text="Enter the email address to resend the OTP to."
+    )
+
+    def validate_email(self, value):
+        """
+        Validates that a user with the provided email exists.
+        """
         if not User.objects.filter(email=value).exists():
             raise serializers.ValidationError("User with this email does not exist.")
         return value
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    otp = serializers.CharField(max_length=4)
-    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
-    password2 = serializers.CharField(write_only=True, style={'input_type': 'password'})
+    """
+    Serializer for confirming a password reset with OTP and new password.
+    """
+    email = serializers.EmailField(
+        max_length=254,
+        required=True,
+        help_text="Enter your email address."
+    )
+    otp = serializers.CharField(
+        max_length=4,
+        min_length=4,
+        required=True,
+        help_text="Enter the 4-digit OTP received."
+    )
+    password = serializers.CharField(
+        write_only=True,  # This field will not be readable
+        style={'input_type': 'password'},
+        required=True,
+        help_text="Enter your new password."
+    )
+    password2 = serializers.CharField(
+        write_only=True,
+        style={'input_type': 'password'},
+        required=True,
+        help_text="Confirm your new password."
+    )
 
     def validate(self, attrs):
-        if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError({"password": "Password fields didn't match."})
-        
-        try:
-            user = User.objects.get(email=attrs['email'])
-            if user.otp != attrs['otp']:
-                raise serializers.ValidationError({"otp": "Invalid OTP."})
-        except User.DoesNotExist:
-            raise serializers.ValidationError({"email": "User with this email does not exist."})
+        """
+        Validates the OTP and checks if the passwords match.
+        """
+        email = attrs.get('email')
+        otp_entered = attrs.get('otp')
+        password = attrs.get('password')
+        password2 = attrs.get('password2')
 
+        # Check if passwords match
+        if password and password2 and password != password2:
+            raise serializers.ValidationError({"password": "Password fields didn't match."})
+
+        # Validate OTP and user existence
+        try:
+            user = User.objects.get(email=email)
+            # Assuming your User model has an 'otp' field to store the OTP
+            if not user.otp or user.otp != otp_entered:
+                raise serializers.ValidationError({"otp": "Invalid or expired OTP."})
+        except User.DoesNotExist:
+            # This case should ideally be caught by validate_email in PasswordResetRequestSerializer
+            # or ResendOTPSerializer if called first, but good to have here too for direct use.
+            raise serializers.ValidationError({"email": "User with this email does not exist."})
+        except AttributeError:
+             # Handle case where User model might not have 'otp' field
+            raise serializers.ValidationError({"otp": "OTP functionality not available for this user model."})
+
+        # Add a check for OTP expiration if you implement that feature
+        # For example: if user.otp_expires_at < timezone.now(): raise serializers.ValidationError({"otp": "OTP has expired."})
+
+        attrs['user'] = user # Make the user object available for the view
         return attrs
-    
 
 # **************************************************************** REsend Otp **********************************************
 class ResendOTPSerializer(serializers.Serializer):
-    def validate(self, attrs):
-        request = self.context.get("request")
-        email = request.session.get("pending_email")  # Session থেকে email নাও
+    email = serializers.EmailField(required=True)
 
-        if not email:
-            raise serializers.ValidationError({"detail": "No pending registration found."})
+    def validate(self, attrs):
+        email = attrs.get('email')
 
         try:
             user = User.objects.get(email=email)
@@ -126,19 +197,18 @@ class ResendOTPSerializer(serializers.Serializer):
     def save(self):
         user = self.user
 
-        # ✅ ৪ digit OTP generate করো
+        # Generate 4-digit OTP
         otp = random.randint(1000, 9999)
-
-
+      
         user.otp = str(otp)
         user.save()
 
-        # ✅ ইমেইল পাঠাও (OTP + custom message)
+        # Send OTP email
         message = f"""
         Dear {user.first_name or 'User'},
 
         Your One Time Password (OTP) is: {otp}
-        This OTP will expire in 1 minutes.
+        It will expire in 10 minutes.
 
         If you did not request this, please ignore this email.
 
@@ -149,7 +219,7 @@ class ResendOTPSerializer(serializers.Serializer):
         send_mail(
             'Dream Apps - OTP Verification',
             message,
-            'from@example.com',  # sender email address
+            'from@example.com',
             [user.email],
             fail_silently=False,
         )

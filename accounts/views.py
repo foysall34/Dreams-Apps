@@ -15,7 +15,7 @@ from datetime import timedelta
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from .authentication import JWTAuthenticationAllowInactive 
+from django.contrib.auth import get_user_model
 
 class RegisterView(APIView):
     permission_classes = [AllowAny] 
@@ -141,7 +141,7 @@ class PasswordResetConfirmAPI(APIView):
 
 # For resend api 
 class ResendOTPView(APIView):
-    permission_classes = [AllowAny] 
+    permission_classes = [AllowAny]  # Login না করা user এর জন্য
 
     def post(self, request, *args, **kwargs):
         serializer = ResendOTPSerializer(data=request.data, context={"request": request})
@@ -149,3 +149,121 @@ class ResendOTPView(APIView):
         serializer.save()
         return Response({"detail": "OTP resent successfully."}, status=200)
 
+
+
+
+User = get_user_model()
+
+# OTP পাঠানোর জন্য একটি Helper ফাংশন (ঐচ্ছিক কিন্তু প্রস্তাবিত)
+def send_otp_via_email(email, otp):
+    """
+    এই ফাংশনটি ব্যবহারকারীকে ইমেলের মাধ্যমে OTP পাঠাবে।
+    আপনার ইমেল পাঠানোর সার্ভিস (যেমন SendGrid, SMTP) এখানে যুক্ত করুন।
+    """
+    subject = 'Your Password Reset OTP'
+    message = f'Your OTP for password reset is: {otp}'
+    from_email = 'your-email@example.com' # আপনার ইমেল ঠিকানা
+    recipient_list = [email]
+    
+    # Django-র ইমেল পাঠানোর ফাংশন ব্যবহার করুন
+    # from django.core.mail import send_mail
+    # send_mail(subject, message, from_email, recipient_list)
+    
+    # আপাতত আমরা প্রিন্ট করে রাখছি
+    print(f"Sending OTP {otp} to {email}")
+
+
+class PasswordResetRequestView(generics.GenericAPIView):
+    """
+    API endpoint to request a password reset. 
+    Generates an OTP and sends it to the user's email.
+    """
+    serializer_class = PasswordResetRequestSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+        
+        try:
+            user = User.objects.get(email=email)
+            # একটি নতুন ৪-সংখ্যার OTP তৈরি করুন
+            otp = str(random.randint(1000, 9999))
+            
+            # ব্যবহারকারীর অ্যাকাউন্টে নতুন OTP সংরক্ষণ করুন
+            user.otp = otp
+            user.save()
+            
+            # ব্যবহারকারীকে ইমেলের মাধ্যমে OTP পাঠান
+            send_otp_via_email(user.email, otp)
+            
+            return Response(
+                {"message": "An OTP has been sent to your email."}, 
+                status=status.HTTP_200_OK
+            )
+            
+        except User.DoesNotExist:
+            # সিরিয়ালাইজার এটি হ্যান্ডেল করলেও, একটি অতিরিক্ত সুরক্ষা স্তর রাখা ভালো
+            return Response(
+                {"error": "User with this email does not exist."}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+class ResendOTPViewforPassword(generics.GenericAPIView):
+    """
+    API endpoint to resend OTP for password reset.
+    """
+    serializer_class = ResendOTPSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+        
+        try:
+            user = User.objects.get(email=email)
+            # একটি নতুন ৪-সংখ্যার OTP তৈরি করুন
+            new_otp = str(random.randint(1000, 9999))
+            
+            # ব্যবহারকারীর অ্যাকাউন্টে নতুন OTP সংরক্ষণ করুন
+            user.otp = new_otp
+            user.save()
+            
+            # ব্যবহারকারীকে ইমেলের মাধ্যমে নতুন OTP পাঠান
+            send_otp_via_email(user.email, new_otp)
+            
+            return Response(
+                {"message": "A new OTP has been sent to your email."}, 
+                status=status.HTTP_200_OK
+            )
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User with this email does not exist."}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+class PasswordResetConfirmView(generics.GenericAPIView):
+    """
+    API endpoint to confirm password reset with OTP and new password.
+    """
+    serializer_class = PasswordResetConfirmSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # সিরিয়ালাইজার ভ্যালিডেশনের সময় ব্যবহারকারীকে 'attrs'-এ যুক্ত করেছে
+        user = serializer.validated_data['user']
+        new_password = serializer.validated_data['password']
+        
+        # নতুন পাসওয়ার্ড সেট করুন (set_password ব্যবহার করলে পাসওয়ার্ড হ্যাশ হয়ে যাবে)
+        user.set_password(new_password)
+        
+        # OTP ব্যবহার হয়ে গেলে তা মুছে ফেলুন
+        user.otp = None 
+        user.save()
+        
+        return Response(
+            {"message": "Password has been reset successfully."}, 
+            status=status.HTTP_200_OK
+        )
