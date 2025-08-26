@@ -5,10 +5,9 @@ import requests
 import google.generativeai as genai
 from django.conf import settings
 
-# API Key গুলো settings.py থেকে লোড হবে
+
 genai.configure(api_key=settings.GOOGLE_API_KEY)
 
-# পরিবর্তনটি এখানে করা হয়েছে: একটি স্থিতিশীল মডেল আইডি ব্যবহার করা হয়েছে
 MODEL_ID = "gemini-1.5-flash"
 
 def interpret_dream_gemini(user_query):

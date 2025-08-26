@@ -2,9 +2,8 @@
 
 import openai
 import json
-from django.conf import settings  # Django settings ইম্পোর্ট করুন
+from django.conf import settings  
 
-# ক্লায়েন্টকে এখানে কনফিগার করুন
 try:
     client = openai.OpenAI(
         api_key=settings.DEEPSEEK_API_KEY,
@@ -12,7 +11,6 @@ try:
     )
     MODEL_ID = "deepseek-chat"
 except Exception as e:
-    # যদি API কী সেট করা না থাকে তবে হ্যান্ডেল করার জন্য
     client = None
     print(f"Warning: DeepSeek client could not be initialized. Error: {e}")
 
@@ -21,7 +19,6 @@ def interpret_dream_deepseek(dream, detailed=False, last_interpretation=None, as
     if not client:
         raise ConnectionError("DeepSeek API client is not configured. Please check your API key.")
 
-    # আপনার প্রম্পট তৈরির লজিক একই থাকবে
     if detailed:
         prompt = f"""
         The user shared this dream: "{dream}".
