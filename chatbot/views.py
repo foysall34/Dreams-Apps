@@ -100,3 +100,66 @@ class DreamInterpretationAPIView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception as e:
             return Response({"error": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+# For voice api 
+# interpreter/views.py
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.parsers import MultiPartParser, JSONParser
+from .voice import audio_file_to_text, interpret_dream_openai
+import os
+from django.conf import settings
+import json
+
+class InterpretDreamView(APIView):
+    parser_classes = [MultiPartParser, JSONParser]
+
+    def post(self, request, *args, **kwargs):
+        detailed = request.query_params.get('detailed', 'false').lower() == 'true'
+        ask_sides = request.query_params.get('ask_sides', 'false').lower() == 'true'
+        language = request.query_params.get('language', 'en')
+
+        # Check if the request contains a file upload
+        if 'voice' in request.FILES:
+            voice_file = request.FILES['voice']
+            
+            # Save the uploaded file temporarily
+            file_path = os.path.join(settings.MEDIA_ROOT, voice_file.name)
+            with open(file_path, 'wb+') as destination:
+                for chunk in voice_file.chunks():
+                    destination.write(chunk)
+            
+            dream_text = audio_file_to_text(file_path, language=language)
+            
+            # Clean up the temporary file
+            os.remove(file_path)
+
+        # Check if the request contains JSON data
+        elif 'dream' in request.data:
+            dream_text = request.data.get('dream')
+        
+        else:
+            return Response(
+                {"error": "Please provide either a 'dream' in the request body or a 'voice' file."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not dream_text or dream_text.startswith("Error:"):
+            return Response(
+                {"error": "Could not process the provided input."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        interpretation = interpret_dream_openai(dream_text, detailed=detailed, ask_sides=ask_sides)
+        
+        try:
+            # The OpenAI response is expected to be a JSON string
+            return Response(json.loads(interpretation), status=status.HTTP_200_OK)
+        except json.JSONDecodeError:
+            return Response(
+                {"error": "Failed to decode the interpretation from the external service."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
