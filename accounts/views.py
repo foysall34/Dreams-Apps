@@ -64,7 +64,7 @@ class LoginAPI(APIView):
 
             if user is not None:
                 if user.is_active:
-                    # আগের টোকেন জেনারেশন কোড মুছে নতুন কোড যুক্ত করুন
+                 
                     refresh = RefreshToken.for_user(user)
                     
                     return Response({
@@ -74,7 +74,8 @@ class LoginAPI(APIView):
                         "user_info": {
                             "first_name": user.first_name,
                             "last_name": user.last_name,
-                            "email": user.email
+                            "email": user.email,
+                            "user_type" : user.user_type,
                         }
                     }, status=status.HTTP_200_OK)
                 else:
