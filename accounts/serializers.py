@@ -8,6 +8,12 @@ from django.core.mail import send_mail
 from django.contrib.auth import get_user_model
 
 
+class PlanTypeSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['email' , 'user_type']
+
+
 class UserRegisterSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(style={'input_type': 'password'}, write_only=True)
     tokens = serializers.SerializerMethodField(read_only=True)
@@ -20,9 +26,6 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         }
 
     def get_tokens(self, user):
-        """
-        রেসপন্সে দেখানোর জন্য টোকেন তৈরি করে।
-        """
         refresh = RefreshToken.for_user(user)
         return {
             'refresh': str(refresh),

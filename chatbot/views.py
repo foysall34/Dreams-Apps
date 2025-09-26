@@ -6,12 +6,13 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
 from .models import Dream
-from .serializers import DreamInterpretationSerializer
+from .serializers import DreamInterpretationSerializer , DreamHistorySerializer
 from .import dream_interpreter, voice_services
+from rest_framework import generics
+
 
 class DreamInterpretationView(APIView):
     permission_classes = [IsAuthenticated]
-
     def post(self, request, *args, **kwargs):
         serializer = DreamInterpretationSerializer(data=request.data)
         if not serializer.is_valid():
@@ -21,7 +22,6 @@ class DreamInterpretationView(APIView):
         dream_text = validated_data['text']
         user = request.user
         answers = validated_data.get('answers')
-
         dream, created = Dream.objects.get_or_create(user=user, text=dream_text)
 
         if dream.status == 'completed':
@@ -93,3 +93,26 @@ class DreamInterpretationView(APIView):
             "ans_type": "interpretation"
         }
         return Response(response_data, status=status.HTTP_201_CREATED)
+
+# For store History 
+
+class DreamHistoryView(generics.ListAPIView):
+   
+    permission_classes = [IsAuthenticated]
+    serializer_class = DreamHistorySerializer
+
+    def get_queryset(self):
+
+        user = self.request.user
+        return Dream.objects.filter(user=user).order_by('-created_at')
+
+class DreamDetailView(generics.RetrieveAPIView):
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = DreamHistorySerializer
+    queryset = Dream.objects.all()
+
+    def get_queryset(self):
+    
+        user = self.request.user
+        return Dream.objects.filter(user=user)

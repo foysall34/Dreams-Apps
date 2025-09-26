@@ -23,3 +23,18 @@ class DreamInterpretationSerializer(serializers.ModelSerializer):
             'answers', 'ultimate_interpretation', 'audio_url', 'ans_type'
         ]
         read_only_fields = ['id', 'interpretation', 'questions', 'ultimate_interpretation']
+
+
+class DreamHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Dream
+        fields = (
+            'id', 
+            'text', 
+            'interpretation', 
+            'questions', 
+            'answers', 
+            'ultimate_interpretation', 
+            'status', 
+            'created_at'
+        )

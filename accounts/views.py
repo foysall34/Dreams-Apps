@@ -6,16 +6,33 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
-from .serializers import ResendOTPSerializer,UserRegisterSerializer, VerifyOTPSerializer, LoginSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer
+from .serializers import PlanTypeSerializers,ResendOTPSerializer,UserRegisterSerializer, VerifyOTPSerializer, LoginSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer
 from .models import User
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework import generics
+from rest_framework import generics,permissions
 import random
 from datetime import timedelta
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth import get_user_model
+
+
+class UserProfileTypeView(generics.RetrieveUpdateAPIView):
+  
+    queryset = User.objects.all()
+    serializer_class = PlanTypeSerializers
+    permission_classes = [permissions.IsAuthenticated]
+
+
+    def get_object(self):
+        """
+        This view should return an object for the currently authenticated user.
+        """
+        return self.request.user
+
+
+
 
 class RegisterView(APIView):
     permission_classes = [AllowAny] 
@@ -157,20 +174,14 @@ User = get_user_model()
 
 # OTP পাঠানোর জন্য একটি Helper ফাংশন (ঐচ্ছিক কিন্তু প্রস্তাবিত)
 def send_otp_via_email(email, otp):
-    """
-    এই ফাংশনটি ব্যবহারকারীকে ইমেলের মাধ্যমে OTP পাঠাবে।
-    আপনার ইমেল পাঠানোর সার্ভিস (যেমন SendGrid, SMTP) এখানে যুক্ত করুন।
-    """
+
     subject = 'Your Password Reset OTP'
     message = f'Your OTP for password reset is: {otp}'
-    from_email = 'your-email@example.com' # আপনার ইমেল ঠিকানা
+    from_email = 'your-email@example.com'
     recipient_list = [email]
     
-    # Django-র ইমেল পাঠানোর ফাংশন ব্যবহার করুন
-    # from django.core.mail import send_mail
-    # send_mail(subject, message, from_email, recipient_list)
-    
-    # আপাতত আমরা প্রিন্ট করে রাখছি
+
+
     print(f"Sending OTP {otp} to {email}")
 
 
@@ -188,14 +199,12 @@ class PasswordResetRequestView(generics.GenericAPIView):
         
         try:
             user = User.objects.get(email=email)
-            # একটি নতুন ৪-সংখ্যার OTP তৈরি করুন
+  
             otp = str(random.randint(1000, 9999))
             
-            # ব্যবহারকারীর অ্যাকাউন্টে নতুন OTP সংরক্ষণ করুন
             user.otp = otp
             user.save()
             
-            # ব্যবহারকারীকে ইমেলের মাধ্যমে OTP পাঠান
             send_otp_via_email(user.email, otp)
             
             return Response(
@@ -204,7 +213,7 @@ class PasswordResetRequestView(generics.GenericAPIView):
             )
             
         except User.DoesNotExist:
-            # সিরিয়ালাইজার এটি হ্যান্ডেল করলেও, একটি অতিরিক্ত সুরক্ষা স্তর রাখা ভালো
+
             return Response(
                 {"error": "User with this email does not exist."}, 
                 status=status.HTTP_404_NOT_FOUND
@@ -223,14 +232,14 @@ class ResendOTPViewforPassword(generics.GenericAPIView):
         
         try:
             user = User.objects.get(email=email)
-            # একটি নতুন ৪-সংখ্যার OTP তৈরি করুন
+
             new_otp = str(random.randint(1000, 9999))
             
-            # ব্যবহারকারীর অ্যাকাউন্টে নতুন OTP সংরক্ষণ করুন
+
             user.otp = new_otp
             user.save()
             
-            # ব্যবহারকারীকে ইমেলের মাধ্যমে নতুন OTP পাঠান
+
             send_otp_via_email(user.email, new_otp)
             
             return Response(
@@ -253,14 +262,10 @@ class PasswordResetConfirmView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        # সিরিয়ালাইজার ভ্যালিডেশনের সময় ব্যবহারকারীকে 'attrs'-এ যুক্ত করেছে
         user = serializer.validated_data['user']
         new_password = serializer.validated_data['password']
-        
-        # নতুন পাসওয়ার্ড সেট করুন (set_password ব্যবহার করলে পাসওয়ার্ড হ্যাশ হয়ে যাবে)
+    
         user.set_password(new_password)
-        
-        # OTP ব্যবহার হয়ে গেলে তা মুছে ফেলুন
         user.otp = None 
         user.save()
         
