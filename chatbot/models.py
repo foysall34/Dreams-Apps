@@ -25,3 +25,19 @@ class Dream(models.Model):
 
     def __str__(self):
         return f"Dream by {self.user.username} on {self.created_at.strftime('%Y-%m-%d')}"
+    
+
+class Subscription(models.Model):
+    USER_PLAN_CHOICES = [
+        ('free', 'free'),
+        ('premium', 'premium'), 
+        ('platinum', 'platinum'),
+    ]
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    stripe_customer_id = models.CharField(max_length=255, blank=True, null=True)
+    stripe_subscription_id = models.CharField(max_length=255, blank=True, null=True)
+    plan = models.CharField(max_length=10, choices=USER_PLAN_CHOICES, default='free') 
+    is_active = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.plan}"

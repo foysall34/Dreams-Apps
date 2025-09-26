@@ -62,8 +62,27 @@ EMAIL_USE_TLS = config('EMAIL_USE_TLS', cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 
+# settings.py
+
+STRIPE_PUBLISHABLE_KEY=config('STRIPE_PUBLISHABLE_KEY')
+STRIPE_SECRET_KEY=config('STRIPE_SECRET_KEY')
+STRIPE_WEBHOOK_SECRET=config('STRIPE_WEBHOOK_SECRET')
+FRONTEND_CHECKOUT_SUCCESS_URL = 'http://yourfrontend.com/success'
+FRONTEND_CHECKOUT_CANCEL_URL = 'http://yourfrontend.com/cancel'
 
 
+REST_FRAMEWORK = {
+    # ... other settings
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',
+        'user': '1000/day',
+        'dream_interpretation': '1/day' 
+    }
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

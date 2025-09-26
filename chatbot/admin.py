@@ -1,6 +1,7 @@
-# your_app/admin.py
 
-# from django.contrib import admin
 
-# from .models import Dream
-# admin.site.register(Dream)
+from django.contrib import admin
+
+from .models import Dream ,Subscription
+admin.site.register(Subscription)
+admin.site.register(Dream)
