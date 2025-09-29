@@ -31,29 +31,23 @@ class DreamInterpretationView(APIView):
         user = request.user
         answers = validated_data.get('answers')
 
-        try:
-            subscription = Subscription.objects.get(user=user, is_active=True)
-            user_plan = subscription.plan
-        except Subscription.DoesNotExist:
-            user_plan = 'free'
+
+        user_plan = 'premium'
+        # =================================================================
+        # END: পরিবর্তন সম্পন্ন
+        # =================================================================
             
-        # =================================================================
-        # START: The only change you need is here
-        # =================================================================
         plan_features = {
-            'free':     {'daily_limit': 20, 'question_count': 2, 'has_audio': False}, # <-- পরিবর্তন
-            'premium':  {'daily_limit': 30, 'question_count': 5, 'has_audio': True}, # <-- পরিবর্তন
-            'platinum': {'daily_limit': 30, 'question_count': 7, 'has_audio': True}   # <-- এটি True থাকবে
+            'free':     {'daily_limit': 20, 'question_count': 2, 'has_audio': False}, 
+            'premium':  {'daily_limit': 30, 'question_count': 5, 'has_audio': True},
+            'platinum': {'daily_limit': 30, 'question_count': 7, 'has_audio': True} 
         }
-        # =================================================================
-        # END: The change is complete
-        # =================================================================
 
         current_plan_features = plan_features.get(user_plan, plan_features['free'])
 
         dream, created = Dream.objects.get_or_create(user=user, text=dream_text)
 
-        # Logic for when a user submits answers to previous questions
+        # ব্যবহারকারী যখন আগের প্রশ্নের উত্তর জমা দেয় তখনকার লজিক
         if answers:
             if dream.status != 'initial' or not dream.interpretation:
                 return Response(
@@ -66,9 +60,8 @@ class DreamInterpretationView(APIView):
             )
             
             audio_url = None
-            # This 'if' condition will now only be true for platinum users
+            # প্রিমিয়াম বা প্ল্যাটিনাম ব্যবহারকারীদের জন্য অডিও তৈরি হবে
             if current_plan_features['has_audio']:
-                print(user_plan)
                 audio_url = voice_services.text_to_voice_elevenlabs(
                     text=ultimate_interpretation,
                     user_id=user.id,
@@ -87,14 +80,14 @@ class DreamInterpretationView(APIView):
             }
             return Response(response_data, status=status.HTTP_200_OK)
 
-        # Block re-submission if initial interpretation already exists
+        # যদি একই স্বপ্ন আবার সাবমিট করা হয়, তবে ব্লক করা হবে
         if not created and dream.status == 'initial':
             return Response(
                 {"error": "This dream has already been interpreted. Please provide answers to proceed."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Daily Limit Enforcement
+        # দৈনিক স্বপ্ন দেখার সীমা প্রয়োগ
         today_min = timezone.make_aware(datetime.combine(timezone.now().date(), time.min))
         today_max = timezone.make_aware(datetime.combine(timezone.now().date(), time.max))
         dreams_today_count = Dream.objects.filter(user=user, created_at__range=(today_min, today_max)).count()
@@ -107,13 +100,13 @@ class DreamInterpretationView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS
             )
 
-        # Generate the initial interpretation and questions
+        # প্রাথমিক ইন্টারপ্রিটেশন এবং প্রশ্ন তৈরি করা
         interpretation, questions = dream_interpreter.generate_interpretation(
             user.id, dream_text, current_plan_features['question_count']
         )
         
         audio_url = None
-        # This 'if' condition will now only be true for platinum users
+        # প্রিমিয়াম বা প্ল্যাটিনাম ব্যবহারকারীদের জন্য অডিও তৈরি হবে
         if current_plan_features['has_audio']:
             audio_response_text = f"{interpretation}\n\nHere are some questions to consider:\n{' '.join(questions)}"
             audio_url = voice_services.text_to_voice_elevenlabs(
@@ -162,7 +155,7 @@ class DreamDetailView(generics.RetrieveAPIView):
 
 
 # Stripe Payment Gateway 
-# your_app/views.py
+
 
 import stripe
 from django.conf import settings
@@ -171,6 +164,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from .models import Subscription
+from django.urls import reverse
+
+from .models import Subscription
+User = get_user_model()
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -178,108 +175,154 @@ class CreateCheckoutSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        price_id = request.data.get('price_id')
+ 
+        subscription_type = request.data.get('subscription_type')
+
+        price_id = settings.STRIPE_PRICE_IDS.get(subscription_type)
+
+   
+        if not price_id:
+            return Response(
+                {"error": "Invalid or missing subscription_type."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
+            success_url = request.build_absolute_uri(reverse('success'))
+            cancel_url = request.build_absolute_uri(reverse('cancel'))
+
             checkout_session = stripe.checkout.Session.create(
                 line_items=[
                     {
-                        'price': price_id,
+                        'price': price_id,  
                         'quantity': 1,
                     },
                 ],
                 mode='subscription',
-                success_url=settings.FRONTEND_CHECKOUT_SUCCESS_URL,
-                cancel_url=settings.FRONTEND_CHECKOUT_CANCEL_URL,
+                success_url=success_url,
+                cancel_url=cancel_url,
                 customer_email=request.user.email,
                 metadata={
-                    'user_id': request.user.id
+                    'user_id': request.user.id,
+        
+                    'subscription_type': subscription_type
                 }
             )
-            return Response({'sessionId': checkout_session.id})
+            return Response({'sessionId': checkout_session.url})
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+
+@method_decorator(csrf_exempt, name='dispatch')
 class StripeWebhookView(APIView):
-    """
-    Handles incoming webhooks from Stripe to update user subscriptions.
-    """
     def post(self, request, *args, **kwargs):
+
+        
+        print("\n--- [Debug] Webhook request received! ---")
+
+        webhook_secret = settings.STRIPE_WEBHOOK_SECRET
         payload = request.body
         sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
         event = None
 
         try:
             event = stripe.Webhook.construct_event(
-                payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
+                payload, sig_header, webhook_secret
             )
         except ValueError as e:
-            # Invalid payload
+            # --- [Debug 2] ---
+            # If the payload is invalid
+            print(f" [Debug] Invalid Payload! Error: {str(e)}")
             return Response(status=status.HTTP_400_BAD_REQUEST)
         except stripe.error.SignatureVerificationError as e:
-            # Invalid signature
+            # --- [Debug 3] ---
+            # If the Webhook Secret Key does not match
+            print(f" [Debug] Signature verification failed! Check your STRIPE_WEBHOOK_SECRET. Error: {str(e)}")
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
-        # =================================================================
-        # START: Handle the checkout.session.completed event
-        # =================================================================
+        # --- [Debug 4] ---
+        # See which type of event was received
+        print(f"✅ [Debug] Event constructed successfully. Type: {event['type']}")
+
         if event['type'] == 'checkout.session.completed':
+            print("--- [Debug] Handling 'checkout.session.completed' event ---")
             session = event['data']['object']
             
-            # Retrieve user_id from metadata
-            user_id = session.get('metadata', {}).get('user_id')
-            if not user_id:
-                return Response({"error": "User ID not in session metadata"}, status=status.HTTP_400_BAD_REQUEST)
+            metadata = session.get('metadata', {})
+            # --- [Debug 5] ---
+            # Print the entire metadata object to see what's inside
+            print(f"[Debug] Received Metadata: {metadata}")
+            
+            user_id = metadata.get('user_id')
+            print(f"[Debug] Retrieved user_id: {user_id}") # Your previous print
+            
+            subscription_type = metadata.get('subscription_type')
+            print(f"[Debug] Retrieved subscription_type: {subscription_type}") # Your previous print
+
+            if not user_id or not subscription_type:
+                print("[Debug] user_id or subscription_type not found in metadata.")
+                return Response({"error": "User ID or subscription_type not in session metadata"}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
                 user = User.objects.get(id=user_id)
+                # --- [Debug 6] ---
+                # Confirm that the user was found in the database
+                print(f"✅ [Debug] User '{user.username}' (ID: {user.id}) found in the database.")
             except User.DoesNotExist:
+                # --- [Debug 7] ---
+                # If the user could not be found
+                print(f"[Debug] User with ID: {user_id} was not found in the database.")
                 return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-
-            # Retrieve the price ID from the line items
-            try:
-                line_items = stripe.checkout.Session.list_line_items(session.id, limit=1)
-                price_id = line_items.data[0].price.id
-            except Exception as e:
-                return Response({"error": f"Could not retrieve price ID: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Map price_id to plan name
-            new_plan = None
-            if price_id == settings.STRIPE_PREMIUM_PRICE_ID:
-                new_plan = 'premium'
-            elif price_id == settings.STRIPE_PLATINUM_PRICE_ID:
-                new_plan = 'platinum'
             
-            if not new_plan:
-                return Response({"error": f"Price ID {price_id} not configured"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Update or create the subscription for the user
+            # --- [Debug 8] ---
+            # Just before the database operation
+            print("[Debug] Calling Subscription.objects.update_or_create...")
+            
             Subscription.objects.update_or_create(
                 user=user,
                 defaults={
                     'stripe_customer_id': session.customer,
                     'stripe_subscription_id': session.subscription,
-                    'plan': new_plan,
+                    'plan': subscription_type,  
                     'is_active': True
                 }
             )
-            print(f"Successfully updated plan to '{new_plan}' for user {user.username}")
+   
+            # --- [Debug 9] ---
+            # After a successful database update
+            print(f"✅ [Debug] Successfully created/updated plan to '{subscription_type}' for user '{user.username}'.")
 
-        # =================================================================
-        # END: Handle the checkout.session.completed event
-        # =================================================================
-
-        # Handle other events like subscription cancellation
-        if event['type'] == 'customer.subscription.deleted':
-            subscription_id = event['data']['object']['id']
-            try:
-                # Find the subscription and revert the user to the free plan
-                user_subscription = Subscription.objects.get(stripe_subscription_id=subscription_id)
-                user_subscription.plan = 'free'
-                user_subscription.is_active = False
-                user_subscription.save()
-                print(f"Subscription cancelled for user {user_subscription.user.username}. Reverted to free plan.")
-            except Subscription.DoesNotExist:
-                pass # Subscription already deleted or not found
-
+        # You can also log other events if you need to
+        # else:
+        #     print(f"--- [Debug] Received event '{event['type']}' but it is not being handled. ---")
+      
         return Response(status=status.HTTP_200_OK)
+
+
+from django.views.generic import TemplateView
+class SuccessView(TemplateView):
+    template_name = 'success.html'
+
+class CancelView(TemplateView):
+    template_name = 'cancel.html'
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from .models import Pricing
+from .serializers import PricingSerializer
+
+
+
+
+
+
+# Get all Pricing (GET)
+class PricingListView(generics.ListAPIView):
+    queryset = Pricing.objects.all()
+    serializer_class = PricingSerializer
+
+

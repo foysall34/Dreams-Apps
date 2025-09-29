@@ -41,3 +41,13 @@ class Subscription(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.plan}"
+    
+
+class Pricing(models.Model):
+    user_plan = models.CharField(max_length=255, blank=True, null=True)
+    description = models.TextField(max_length=1500)
+    price = models.FloatField()
+    feature = models.TextField(max_length=1500) 
+   
+    def __str__(self):
+        return f"{self.user_plan}"

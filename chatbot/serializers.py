@@ -1,7 +1,7 @@
 # dreams/serializers.py
 
 from rest_framework import serializers
-from .models import Dream
+from .models import Dream , Pricing
 
 class DreamInterpretationSerializer(serializers.ModelSerializer):
     # 'answers' is write-only, it's for input on the 2nd request
@@ -38,3 +38,21 @@ class DreamHistorySerializer(serializers.ModelSerializer):
             'status', 
             'created_at'
         )
+
+
+class PricingSerializer(serializers.ModelSerializer):
+  
+    feature = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Pricing
+        fields = ['id', 'user_plan', 'description', 'price', 'feature']
+
+
+    def get_feature(self, obj):
+  
+        if obj.feature:
+          
+            features_list = [line.strip() for line in obj.feature.splitlines() if line.strip()]
+            return features_list
+        return [] 

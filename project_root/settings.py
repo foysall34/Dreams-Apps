@@ -67,8 +67,12 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 STRIPE_PUBLISHABLE_KEY=config('STRIPE_PUBLISHABLE_KEY')
 STRIPE_SECRET_KEY=config('STRIPE_SECRET_KEY')
 STRIPE_WEBHOOK_SECRET=config('STRIPE_WEBHOOK_SECRET')
-FRONTEND_CHECKOUT_SUCCESS_URL = 'http://yourfrontend.com/success'
-FRONTEND_CHECKOUT_CANCEL_URL = 'http://yourfrontend.com/cancel'
+
+
+STRIPE_PRICE_IDS = {
+    'premium': 'price_1SBTZUCk78tT87fWLPOgBRDn',  
+    'platinum': 'price_1SBqOeCk78tT87fWCSa78vzm', 
+}
 
 
 REST_FRAMEWORK = {
@@ -103,6 +107,14 @@ REST_FRAMEWORK = {
     )
 }
 
+
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=8),  

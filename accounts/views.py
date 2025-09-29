@@ -34,42 +34,39 @@ class UserProfileTypeView(generics.RetrieveUpdateAPIView):
 
 
 
-class RegisterView(APIView):
-    permission_classes = [AllowAny] 
+class UserRegisterView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = UserRegisterSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        if serializer.is_valid():
+            serializer.save() # এটি এখন ডেটা ক্যাশে সেভ করবে, ডাটাবেসে নয়
+            return Response({
+                "message": "OTP has been sent to your email. Please verify to complete registration."
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 
-        # Register এর সময় email কে session এ রাখবো
-        request.session['pending_email'] = user.email  
-
-        return Response(
-            {"detail": "User registered successfully. Please verify OTP."}, 
-            status=201
-        )
-
-
-class VerifyOTPAPI(APIView):
-    def post(self, request):
+class VerifyOTPView(APIView):
+    def post(self, request, *args, **kwargs):
         serializer = VerifyOTPSerializer(data=request.data)
         if serializer.is_valid():
-            email = serializer.validated_data['email']
-            otp = serializer.validated_data['otp']
-
-            try:
-                user = User.objects.get(email=email)
-                if user.otp == otp:
-                    user.is_active = True
-                    user.otp = None # OTP ব্যবহারের পর মুছে ফেলা হলো
-                    user.save()
-                    return Response({"message": "Account verified successfully."}, status=status.HTTP_200_OK)
-                else:
-                    return Response({"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
-            except User.DoesNotExist:
-                return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+            user = serializer.save() # এটি এখন ডাটাবেসে ইউজার তৈরি করবে
+            
+            # ইউজার তৈরির পর টোকেন জেনারেট করা হচ্ছে
+            refresh = RefreshToken.for_user(user)
+            tokens = {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }
+            
+            return Response({
+                "message": "Account verified successfully.",
+                "tokens": tokens,
+                "user": {
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                }
+            }, status=status.HTTP_201_CREATED)
 
 class LoginAPI(APIView):
     def post(self, request):
@@ -140,8 +137,7 @@ class PasswordResetConfirmAPI(APIView):
             # নতুন পাসওয়ার্ড সেট করুন
             user.set_password(password)
             
-            # OTP ব্যবহারের পর মুছে ফেলুন (খুবই গুরুত্বপূর্ণ)
-            user.otp = None 
+
             user.save()
 
             return Response({"message": "Password has been reset successfully."}, status=status.HTTP_200_OK)

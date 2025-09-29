@@ -6,7 +6,8 @@ from datetime import timedelta
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.contrib.auth import get_user_model
-
+from django.contrib.auth.password_validation import validate_password
+from django.core.cache import cache
 
 class PlanTypeSerializers(serializers.ModelSerializer):
     class Meta:
@@ -16,61 +17,90 @@ class PlanTypeSerializers(serializers.ModelSerializer):
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(style={'input_type': 'password'}, write_only=True)
-    tokens = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'password', 'password2', 'tokens']
+        fields = ['first_name', 'last_name', 'email', 'password', 'password2']
         extra_kwargs = {
-            'password': {'write_only': True}
-        }
-
-    def get_tokens(self, user):
-        refresh = RefreshToken.for_user(user)
-        return {
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
+            'password': {'write_only': True, 'validators': [validate_password]},
         }
 
     def validate(self, attrs):
+        # চেক করা হচ্ছে যে এই ইমেইল দিয়ে কোনো ভেরিফাইড ইউজার আছে কিনা
+        if User.objects.filter(email=attrs['email'], is_active=True).exists():
+            raise serializers.ValidationError({"email": "This email is already registered and verified."})
+        
+        # পাসওয়ার্ড দুটি ম্যাচ করছে কিনা চেক করা হচ্ছে
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
+        
         attrs.pop('password2')
         return attrs
 
-    def create(self, validated_data):
-        user = User.objects.create_user(
-            username=validated_data['email'],
-            first_name=validated_data['first_name'],
-            last_name=validated_data['last_name'],
-            email=validated_data['email'],
-            password=validated_data['password']
-        )
-        user.is_active = False  # Initially account will be inactive
+    def save(self, **kwargs):
+        """
+        এই মেথডটি ওভাররাইড করে আমরা ইউজার তৈরি না করে ডেটা ক্যাশে সেভ করবো।
+        """
+        email = self.validated_data['email']
+        
+        # OTP তৈরি করা
+        otp = random.randint(1000, 9999)
+        
+        # ৫ মিনিটের জন্য ডেটা এবং OTP ক্যাশে সেভ করা হচ্ছে
+        cache.set(f'unverified_user_{email}', {
+            'data': self.validated_data,
+            'otp': otp
+        }, timeout=300) # 300 সেকেন্ড = 5 মিনিট
+        
+        print(f"Generated OTP for {email}: {otp}") # ডিবাগিং এর জন্য
 
-        # OTP generation logic
-        otp = random.randint(100000, 999999)
-        otp_expiry = timezone.now() + timedelta(minutes=10)
-
-        user.otp = otp
-        user.otp_expiry = otp_expiry
-        user.save()
-
-        # Send OTP email (without including the OTP in the email body)
+        # OTP ইমেইলে পাঠানো হচ্ছে
         send_mail(
             'Verify your account',
-            'Please check your app to get the OTP.',
-            'from@example.com',  # Replace with your email
-            [user.email],
+            f'Your OTP is {otp}. It will expire in 5 minutes.',
+            'from@example.com', # আপনার ইমেইল
+            [email],
             fail_silently=False,
         )
         
-        # Return the user object after creating
-        return user
+        return self.validated_data
 
 class VerifyOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
     otp = serializers.CharField(max_length=4)
+
+    def validate(self, attrs):
+        email = attrs.get('email')
+        otp = attrs.get('otp')
+        
+        cached_data = cache.get(f'unverified_user_{email}')
+        
+        if cached_data is None:
+            raise serializers.ValidationError("Invalid email or OTP has expired.")
+            
+        if str(cached_data['otp']) != otp:
+            raise serializers.ValidationError("OTP is incorrect.")
+            
+        return cached_data['data']
+
+    def create(self, validated_data):
+        """
+        এই মেথডটি সফল ভেরিফিকেশনের পর ইউজার তৈরি করবে।
+        """
+        user = User.objects.create_user(
+            username=validated_data['email'],
+            email=validated_data['email'],
+            first_name=validated_data['first_name'],
+            last_name=validated_data['last_name'],
+            password=validated_data['password']
+        )
+        user.is_active = True
+        user.save()
+
+        # সফলভাবে ইউজার তৈরির পর ক্যাশ থেকে ডেটা মুছে ফেলা হচ্ছে
+        cache.delete(f"unverified_user_{validated_data['email']}")
+        
+        return user
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -128,12 +158,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         required=True,
         help_text="Enter your email address."
     )
-    otp = serializers.CharField(
-        max_length=4,
-        min_length=4,
-        required=True,
-        help_text="Enter the 4-digit OTP received."
-    )
+
     password = serializers.CharField(
         write_only=True,  # This field will not be readable
         style={'input_type': 'password'},
@@ -152,7 +177,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         Validates the OTP and checks if the passwords match.
         """
         email = attrs.get('email')
-        otp_entered = attrs.get('otp')
+        # otp_entered = attrs.get('otp')
         password = attrs.get('password')
         password2 = attrs.get('password2')
 
@@ -164,15 +189,15 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         try:
             user = User.objects.get(email=email)
             # Assuming your User model has an 'otp' field to store the OTP
-            if not user.otp or user.otp != otp_entered:
-                raise serializers.ValidationError({"otp": "Invalid or expired OTP."})
+            # if not user.otp or user.otp != otp_entered:
+            #     raise serializers.ValidationError({"otp": "Invalid or expired OTP."})
         except User.DoesNotExist:
             # This case should ideally be caught by validate_email in PasswordResetRequestSerializer
             # or ResendOTPSerializer if called first, but good to have here too for direct use.
             raise serializers.ValidationError({"email": "User with this email does not exist."})
-        except AttributeError:
-             # Handle case where User model might not have 'otp' field
-            raise serializers.ValidationError({"otp": "OTP functionality not available for this user model."})
+        # except AttributeError:
+        #      # Handle case where User model might not have 'otp' field
+        #     raise serializers.ValidationError({"otp": "OTP functionality not available for this user model."})
 
         # Add a check for OTP expiration if you implement that feature
         # For example: if user.otp_expires_at < timezone.now(): raise serializers.ValidationError({"otp": "OTP has expired."})
