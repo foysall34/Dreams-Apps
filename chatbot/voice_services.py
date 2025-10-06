@@ -8,10 +8,21 @@ from django.conf import settings
 
 # A dictionary of available voices
 VOICES = {
-    "soothing_female": "pjcYQlDFKMbcOUp6F5GD",
-    "deep_male": "kHhWB9Fw3aF6ly7JvltC",
-    "calm_neutral": "ys3XeJJA4ArWMhRpcX1D"
+
+    "Soothing_female": "pjcYQlDFKMbcOUp6F5GD",
+    "Deep_male": "kHhWB9Fw3aF6ly7JvltC",
+    "Calm_neutral": "ys3XeJJA4ArWMhRpcX1D" ,
+    "Michael": "uju3wxzG5OhpWcoi3SMy",
+    "cera": "ucgJ8SdlW1CZr9MIm8BP",
+    "clara": "8LVfoRdkh4zgjr8v5ObE",
+    "Christopher": "1YGgSmpRGVzkcaI7zhbX",
+    "Eve": "G4Wh6MqJNTzYtuAeMqv5",
+    "John": "c4NIULtANlpduSDihsKJ",
+    "David": "iEw1wkYocsNy7I7pteSN",
+
 }
+
+ 
 
 def voice_to_text(audio_path: str):
     """
@@ -32,23 +43,12 @@ def voice_to_text(audio_path: str):
         print(f"Error during voice-to-text transcription: {e}")
         return ""
 
-def text_to_voice_elevenlabs(text: str, user_id: int, voice_choice: str = "soothing_female"):
-    """
-    Convert text to speech using the ElevenLabs API and save the file.
-    
-    Args:
-        text (str): The text to convert to speech.
-        user_id (int): The ID of the user to create a unique filename.
-        voice_choice (str): The key for the desired voice from the VOICES dictionary.
-        
-    Returns:
-        str: The URL path to the generated audio file, or None on failure.
-    """
+def text_to_voice_elevenlabs(text: str, user_id: int, voice_choice: str = "Soothing_female"):
     api_key = settings.ELEVENLABS_API_KEY
     if not api_key:
         raise ValueError("ELEVENLABS_API_KEY is not set in Django settings.")
 
-    voice_id = VOICES.get(voice_choice, VOICES["soothing_female"])
+    voice_id = VOICES.get(voice_choice, VOICES["Soothing_female"])
     api_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     
     headers = {
@@ -61,27 +61,25 @@ def text_to_voice_elevenlabs(text: str, user_id: int, voice_choice: str = "sooth
         "voice_settings": {"stability": 0.5, "similarity_boost": 0.7}
     }
 
+    print("DEBUG → API_URL:", api_url)
+    print("DEBUG → API_KEY:", api_key[:5] + "****")
+
     try:
-        response = requests.post(api_url, headers=headers, json=payload, timeout=60) # Added timeout
-        response.raise_for_status() # Raises an HTTPError for bad responses (4xx or 5xx)
-
-        # Create a unique filename and ensure the target directory exists
-        timestamp = int(datetime.datetime.now().timestamp())
-        relative_path = os.path.join('audio_files', f"dream_{user_id}_{timestamp}.mp3")
-        absolute_path = os.path.join(settings.MEDIA_ROOT, relative_path)
-        
-        # Create the 'audio_files' directory inside MEDIA_ROOT if it doesn't exist
-        os.makedirs(os.path.dirname(absolute_path), exist_ok=True)
-
-        with open(absolute_path, "wb") as f:
-            f.write(response.content)
-            
-        # Return the URL path, not the filesystem path
-        return os.path.join(settings.MEDIA_URL, relative_path).replace("\\", "/")
-
-    except requests.exceptions.RequestException as e:
-        print(f"ElevenLabs API request failed: {e}")
-        # Optionally, you can inspect response.text for more details if available
-        # if e.response is not None:
-        #     print(f"Response body: {e.response.text}")
+        response = requests.post(api_url, headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as http_err:
+        print(f"HTTP error: {http_err} → {response.text}")
         return None
+    except Exception as e:
+        print(f"Request failed: {e}")
+        return None
+
+    timestamp = int(datetime.datetime.now().timestamp())
+    relative_path = os.path.join('audio_files', f"dream_{user_id}_{timestamp}.mp3")
+    absolute_path = os.path.join(settings.MEDIA_ROOT, relative_path)
+    os.makedirs(os.path.dirname(absolute_path), exist_ok=True)
+
+    with open(absolute_path, "wb") as f:
+        f.write(response.content)
+
+    return os.path.join(settings.MEDIA_URL, relative_path).replace("\\", "/")

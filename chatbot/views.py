@@ -11,8 +11,8 @@ from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
 
 # Make sure to import your models and services
-from .models import Dream, Subscription 
-from .serializers import DreamInterpretationSerializer , DreamHistorySerializer
+from .models import Dream, Subscription  , Pricing
+from .serializers import DreamInterpretationSerializer , DreamHistorySerializer , PricingSerializer , AudioGenerationSerializer
 from .import dream_interpreter, voice_services 
 
 
@@ -31,23 +31,18 @@ class DreamInterpretationView(APIView):
         user = request.user
         answers = validated_data.get('answers')
 
-
         user_plan = 'premium'
-        # =================================================================
-        # END: পরিবর্তন সম্পন্ন
-        # =================================================================
-            
+ 
         plan_features = {
             'free':     {'daily_limit': 20, 'question_count': 2, 'has_audio': False}, 
-            'premium':  {'daily_limit': 30, 'question_count': 5, 'has_audio': True},
-            'platinum': {'daily_limit': 30, 'question_count': 7, 'has_audio': True} 
+            'premium':  {'daily_limit': 30, 'question_count': 5, 'has_audio': False},
+            'platinum': {'daily_limit': 30, 'question_count': 7, 'has_audio': False} 
         }
 
         current_plan_features = plan_features.get(user_plan, plan_features['free'])
 
         dream, created = Dream.objects.get_or_create(user=user, text=dream_text)
 
-        # ব্যবহারকারী যখন আগের প্রশ্নের উত্তর জমা দেয় তখনকার লজিক
         if answers:
             if dream.status != 'initial' or not dream.interpretation:
                 return Response(
@@ -60,12 +55,12 @@ class DreamInterpretationView(APIView):
             )
             
             audio_url = None
-            # প্রিমিয়াম বা প্ল্যাটিনাম ব্যবহারকারীদের জন্য অডিও তৈরি হবে
+           
             if current_plan_features['has_audio']:
                 audio_url = voice_services.text_to_voice_elevenlabs(
                     text=ultimate_interpretation,
                     user_id=user.id,
-                    voice_choice='soothing_female'
+                    voice_choice='Soothing_female'
                 )
 
             dream.answers = answers
@@ -80,14 +75,14 @@ class DreamInterpretationView(APIView):
             }
             return Response(response_data, status=status.HTTP_200_OK)
 
-        # যদি একই স্বপ্ন আবার সাবমিট করা হয়, তবে ব্লক করা হবে
+       
         if not created and dream.status == 'initial':
             return Response(
                 {"error": "This dream has already been interpreted. Please provide answers to proceed."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # দৈনিক স্বপ্ন দেখার সীমা প্রয়োগ
+      
         today_min = timezone.make_aware(datetime.combine(timezone.now().date(), time.min))
         today_max = timezone.make_aware(datetime.combine(timezone.now().date(), time.max))
         dreams_today_count = Dream.objects.filter(user=user, created_at__range=(today_min, today_max)).count()
@@ -100,19 +95,18 @@ class DreamInterpretationView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS
             )
 
-        # প্রাথমিক ইন্টারপ্রিটেশন এবং প্রশ্ন তৈরি করা
         interpretation, questions = dream_interpreter.generate_interpretation(
             user.id, dream_text, current_plan_features['question_count']
         )
         
         audio_url = None
-        # প্রিমিয়াম বা প্ল্যাটিনাম ব্যবহারকারীদের জন্য অডিও তৈরি হবে
+   
         if current_plan_features['has_audio']:
             audio_response_text = f"{interpretation}\n\nHere are some questions to consider:\n{' '.join(questions)}"
             audio_url = voice_services.text_to_voice_elevenlabs(
                 text=audio_response_text,
                 user_id=user.id,
-                voice_choice='soothing_female'
+                voice_choice='Soothing_female'
             )
 
         dream.interpretation = interpretation
@@ -128,6 +122,66 @@ class DreamInterpretationView(APIView):
             "ans_type": "interpretation"
         }
         return Response(response_data, status=status.HTTP_201_CREATED)
+
+
+
+# For audio generation and voice services
+class AudioGenerateView(APIView):
+    """
+    An endpoint to generate audio from text, providing interpretation and questions.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        """
+        Handles POST requests to generate audio and interpretation.
+
+        Requires 'text' and 'user_type' in the request data.
+        'voice_type' is optional.
+        """
+        serializer = AudioGenerationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        validated_data = serializer.validated_data
+        text = validated_data['text']
+        user_type = validated_data['user_type']
+        voice_type = validated_data.get('voice_type', 'Soothing_female')
+        user = request.user
+
+        # Define plan features for different user types
+        plan_features = {
+            'free':     {'question_count': 2, 'has_audio': True},
+            'premium':  {'question_count': 5, 'has_audio': True},
+            'platinum': {'question_count': 7, 'has_audio': True}
+        }
+
+        current_plan_features = plan_features.get(user_type, plan_features['free'])
+
+        # Generate interpretation and questions
+        interpretation, questions = dream_interpreter.generate_interpretation(
+            user.id, text, current_plan_features['question_count']
+        )
+
+        audio_url = None
+        # Generate audio if the user's plan has audio features
+        if current_plan_features['has_audio']:
+            audio_response_text = f"{interpretation}\n\nHere are some questions to consider:\n{' '.join(questions)}"
+            audio_url = voice_services.text_to_voice_elevenlabs(
+                text=audio_response_text,
+                user_id=user.id,
+                voice_choice=voice_type
+            )
+
+        # Prepare the response data
+        response_data = {
+            "text": text,
+            "interpretation": interpretation,
+            "questions": questions,
+            "audio_url": request.build_absolute_uri(audio_url) if audio_url else None
+        }
+        return Response(response_data, status=status.HTTP_201_CREATED)
+
 
 # For store History 
 
@@ -303,8 +357,20 @@ class StripeWebhookView(APIView):
 
 
 from django.views.generic import TemplateView
+from django.views.generic import TemplateView
+
 class SuccessView(TemplateView):
     template_name = 'success.html'
+
+    def get_context_data(self, **kwargs):
+   
+        context = super().get_context_data(**kwargs)
+    
+        context['message'] = "Payment Successful!"
+        context['details'] = "Thank you for your purchase. Your payment has been processed successfully."
+        
+        
+        return context
 
 class CancelView(TemplateView):
     template_name = 'cancel.html'
@@ -312,17 +378,19 @@ class CancelView(TemplateView):
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Pricing
-from .serializers import PricingSerializer
 
 
 
 
 
+class PricingListAPIView(APIView):
+ 
+    def get(self, request, format=None):
 
-# Get all Pricing (GET)
-class PricingListView(generics.ListAPIView):
-    queryset = Pricing.objects.all()
-    serializer_class = PricingSerializer
+        plans = Pricing.objects.all()
+  
+        serializer = PricingSerializer(plans, many=True)
+        return Response(serializer.data)
+
 
 

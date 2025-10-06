@@ -1,7 +1,7 @@
 # dreams/serializers.py
 
 from rest_framework import serializers
-from .models import Dream , Pricing
+from .models import Dream 
 
 class DreamInterpretationSerializer(serializers.ModelSerializer):
     # 'answers' is write-only, it's for input on the 2nd request
@@ -25,6 +25,28 @@ class DreamInterpretationSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'interpretation', 'questions', 'ultimate_interpretation']
 
 
+
+from rest_framework import serializers
+
+class AudioGenerationSerializer(serializers.Serializer):
+    """
+    Serializer for the audio generation endpoint.
+    Validates the text, user_type, and voice_type.
+    """
+    text = serializers.CharField()
+    user_type = serializers.ChoiceField(choices=['free', 'premium', 'platinum'])
+    voice_type = serializers.CharField(required=False, default='soothing_female')
+
+    def validate_text(self, value):
+        """
+        Check that the text is not empty.
+        """
+        if not value.strip():
+            raise serializers.ValidationError("Text cannot be empty.")
+        return value
+
+
+
 class DreamHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Dream
@@ -39,20 +61,20 @@ class DreamHistorySerializer(serializers.ModelSerializer):
             'created_at'
         )
 
+# your_app_name/serializers.py
+
+from rest_framework import serializers
+from .models import Pricing
 
 class PricingSerializer(serializers.ModelSerializer):
-  
-    feature = serializers.SerializerMethodField()
+
+    features = serializers.SerializerMethodField()
 
     class Meta:
         model = Pricing
-        fields = ['id', 'user_plan', 'description', 'price', 'feature']
+      
+        fields = ['id', 'user_plan', 'description', 'price', 'features']
 
-
-    def get_feature(self, obj):
-  
-        if obj.feature:
-          
-            features_list = [line.strip() for line in obj.feature.splitlines() if line.strip()]
-            return features_list
-        return [] 
+    def get_features(self, obj):
+    
+        return obj.get_features()
