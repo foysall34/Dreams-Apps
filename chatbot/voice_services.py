@@ -6,7 +6,7 @@ import requests
 import whisper
 from django.conf import settings
 
-# A dictionary of available voices
+
 VOICES = {
 
     "Soothing_female": "pjcYQlDFKMbcOUp6F5GD",

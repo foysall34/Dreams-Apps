@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import AudioGenerateView,PricingListAPIView,DreamInterpretationView, DreamHistoryView , DreamDetailView , CreateCheckoutSessionView , StripeWebhookView , SuccessView , CancelView
+from .views import VoiceTypeListView,AudioGenerateView,PricingListAPIView,DreamInterpretationView, DreamHistoryView , DreamDetailView , CreateCheckoutSessionView , StripeWebhookView , SuccessView , CancelView
 
 
 
@@ -15,5 +15,6 @@ urlpatterns = [
   path('success/', SuccessView.as_view(), name='success'),
   path('cancel/', CancelView.as_view(), name='cancel'),
   path('audio-generate/', AudioGenerateView.as_view(), name='audio-generate'),
+  path('voice-types/', VoiceTypeListView.as_view(), name='voice-type-list'),
 
 ]

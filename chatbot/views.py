@@ -7,7 +7,7 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, generics
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated , AllowAny
 from django.contrib.auth import get_user_model
 
 # Make sure to import your models and services
@@ -183,6 +183,43 @@ class AudioGenerateView(APIView):
         return Response(response_data, status=status.HTTP_201_CREATED)
 
 
+
+# Types of voice 
+class VoiceTypeListView(APIView):
+    """
+    An endpoint to retrieve a list of all available voice types for audio generation.
+    """
+    permission_classes = [AllowAny] # Or AllowAny if you want it to be public
+
+    def get(self, request, *args, **kwargs):
+        """
+        Handles GET requests to return the list of available voice types.
+        """
+        # You should replace this with your actual list of available voices
+        # from your voice generation service.
+        available_voices = [
+            'Soothing_female',
+            'Calm_male',
+            'Deep_narrator',
+            'Upbeat_female',
+            'Standard_male',
+            'Gentle_female',
+            'Authoritative_male'
+        ]
+
+        response_data = {
+            "available_voice_types": available_voices
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+
+
+
+
+
+
+
 # For store History 
 
 class DreamHistoryView(generics.ListAPIView):
@@ -345,13 +382,11 @@ class StripeWebhookView(APIView):
                 }
             )
    
-            # --- [Debug 9] ---
-            # After a successful database update
+
             print(f"✅ [Debug] Successfully created/updated plan to '{subscription_type}' for user '{user.username}'.")
 
-        # You can also log other events if you need to
-        # else:
-        #     print(f"--- [Debug] Received event '{event['type']}' but it is not being handled. ---")
+
+    
       
         return Response(status=status.HTTP_200_OK)
 

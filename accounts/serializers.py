@@ -108,6 +108,16 @@ class LoginSerializer(serializers.Serializer):
 
 
 
+
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+class UserTypeUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['user_type']
+
 # ************************************forget password ***********************
 User = get_user_model()
 

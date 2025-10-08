@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
-from .serializers import PlanTypeSerializers,ResendOTPSerializer,UserRegisterSerializer, VerifyOTPSerializer, LoginSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer
+from .serializers import PlanTypeSerializers,ResendOTPSerializer,  UserTypeUpdateSerializer ,UserRegisterSerializer, VerifyOTPSerializer,LoginSerializer,  PasswordResetConfirmSerializer, PasswordResetRequestSerializer
 from .models import User
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import generics,permissions
@@ -69,6 +69,20 @@ class VerifyOTPView(APIView):
             }, status=status.HTTP_201_CREATED)
 
 class LoginAPI(APIView):
+    """
+    Handles user login and user type updates.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        """
+        Instantiates and returns the list of permissions that this view requires.
+        Login (POST) should be allowed for any user.
+        """
+        if self.request.method == 'POST':
+            return []
+        return super().get_permissions()
+
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
@@ -78,9 +92,7 @@ class LoginAPI(APIView):
 
             if user is not None:
                 if user.is_active:
-                 
                     refresh = RefreshToken.for_user(user)
-                    
                     return Response({
                         "message": "Login successful.",
                         'refresh': str(refresh),
@@ -89,7 +101,7 @@ class LoginAPI(APIView):
                             "first_name": user.first_name,
                             "last_name": user.last_name,
                             "email": user.email,
-                            "user_type" : user.user_type,
+                            "user_type": user.user_type,
                         }
                     }, status=status.HTTP_200_OK)
                 else:
@@ -97,7 +109,20 @@ class LoginAPI(APIView):
             else:
                 return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
+    def patch(self, request):
+        """
+        Handles partial updates to the user, specifically for the user_type field.
+        """
+        user = request.user
+        serializer = UserTypeUpdateSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "message": "User type updated successfully.",
+                "user_info": serializer.data
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PasswordResetRequestAPI(APIView):
