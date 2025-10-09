@@ -26,39 +26,30 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
-        # চেক করা হচ্ছে যে এই ইমেইল দিয়ে কোনো ভেরিফাইড ইউজার আছে কিনা
+     
         if User.objects.filter(email=attrs['email'], is_active=True).exists():
             raise serializers.ValidationError({"email": "This email is already registered and verified."})
         
-        # পাসওয়ার্ড দুটি ম্যাচ করছে কিনা চেক করা হচ্ছে
+      
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
         
         attrs.pop('password2')
         return attrs
 
-    def save(self, **kwargs):
-        """
-        এই মেথডটি ওভাররাইড করে আমরা ইউজার তৈরি না করে ডেটা ক্যাশে সেভ করবো।
-        """
+    def save(self, **kwargs): 
         email = self.validated_data['email']
-        
-        # OTP তৈরি করা
         otp = random.randint(1000, 9999)
-        
-        # ৫ মিনিটের জন্য ডেটা এবং OTP ক্যাশে সেভ করা হচ্ছে
         cache.set(f'unverified_user_{email}', {
             'data': self.validated_data,
             'otp': otp
-        }, timeout=300) # 300 সেকেন্ড = 5 মিনিট
+        }, timeout=300) 
         
-        print(f"Generated OTP for {email}: {otp}") # ডিবাগিং এর জন্য
-
-        # OTP ইমেইলে পাঠানো হচ্ছে
+        print(f"Generated OTP for {email}: {otp}") 
         send_mail(
             'Verify your account',
             f'Your OTP is {otp}. It will expire in 5 minutes.',
-            'from@example.com', # আপনার ইমেইল
+            'from@example.com', 
             [email],
             fail_silently=False,
         )
@@ -84,9 +75,7 @@ class VerifyOTPSerializer(serializers.Serializer):
         return cached_data['data']
 
     def create(self, validated_data):
-        """
-        এই মেথডটি সফল ভেরিফিকেশনের পর ইউজার তৈরি করবে।
-        """
+    
         user = User.objects.create_user(
             username=validated_data['email'],
             email=validated_data['email'],
@@ -96,8 +85,6 @@ class VerifyOTPSerializer(serializers.Serializer):
         )
         user.is_active = True
         user.save()
-
-        # সফলভাবে ইউজার তৈরির পর ক্যাশ থেকে ডেটা মুছে ফেলা হচ্ছে
         cache.delete(f"unverified_user_{validated_data['email']}")
         
         return user

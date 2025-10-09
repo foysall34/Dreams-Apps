@@ -38,7 +38,7 @@ class UserRegisterView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = UserRegisterSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save() # এটি এখন ডেটা ক্যাশে সেভ করবে, ডাটাবেসে নয়
+            serializer.save() 
             return Response({
                 "message": "OTP has been sent to your email. Please verify to complete registration."
             }, status=status.HTTP_200_OK)
@@ -49,9 +49,9 @@ class VerifyOTPView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = VerifyOTPSerializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.save() # এটি এখন ডাটাবেসে ইউজার তৈরি করবে
+            user = serializer.save() 
             
-            # ইউজার তৈরির পর টোকেন জেনারেট করা হচ্ছে
+        
             refresh = RefreshToken.for_user(user)
             tokens = {
                 'refresh': str(refresh),
@@ -131,13 +131,12 @@ class PasswordResetRequestAPI(APIView):
         if serializer.is_valid():
             email = serializer.validated_data['email']
             user = User.objects.get(email=email)
-            
-            # OTP জেনারেট এবং সেভ করুন
+     
             otp = str(random.randint(1000, 9999))
             user.otp = otp
             user.save()
 
-            # ইমেইলে OTP পাঠান
+   
             subject = 'Your Password Reset OTP'
             message = f'Your OTP for password reset is: {otp}'
             from_email = settings.EMAIL_HOST_USER
@@ -159,7 +158,7 @@ class PasswordResetConfirmAPI(APIView):
 
             user = User.objects.get(email=email)
             
-            # নতুন পাসওয়ার্ড সেট করুন
+      
             user.set_password(password)
             
 
@@ -180,7 +179,7 @@ class PasswordResetConfirmAPI(APIView):
 
 # For resend api 
 class ResendOTPView(APIView):
-    permission_classes = [AllowAny]  # Login না করা user এর জন্য
+    permission_classes = [AllowAny]  
 
     def post(self, request, *args, **kwargs):
         serializer = ResendOTPSerializer(data=request.data, context={"request": request})
@@ -193,7 +192,7 @@ class ResendOTPView(APIView):
 
 User = get_user_model()
 
-# OTP পাঠানোর জন্য একটি Helper ফাংশন (ঐচ্ছিক কিন্তু প্রস্তাবিত)
+
 def send_otp_via_email(email, otp):
 
     subject = 'Your Password Reset OTP'
