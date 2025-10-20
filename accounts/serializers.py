@@ -17,7 +17,6 @@ class PlanTypeSerializers(serializers.ModelSerializer):
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(style={'input_type': 'password'}, write_only=True)
-
     class Meta:
         model = User
         fields = ['first_name', 'last_name', 'email', 'password', 'password2']
@@ -26,14 +25,10 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
-     
         if User.objects.filter(email=attrs['email'], is_active=True).exists():
             raise serializers.ValidationError({"email": "This email is already registered and verified."})
-        
-      
         if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError({"password": "Password fields didn't match."})
-        
+            raise serializers.ValidationError({"password": "Password fields didn't match."}) 
         attrs.pop('password2')
         return attrs
 
@@ -53,8 +48,9 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             [email],
             fail_silently=False,
         )
-        
         return self.validated_data
+
+
 
 class VerifyOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()

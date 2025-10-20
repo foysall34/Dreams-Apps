@@ -36,7 +36,7 @@ class DreamInterpretationView(APIView):
         plan_features = {
             'free':     {'daily_limit': 20, 'question_count': 2, 'has_audio': False}, 
             'premium':  {'daily_limit': 30, 'question_count': 5, 'has_audio': False},
-            'platinum': {'daily_limit': 30, 'question_count': 7, 'has_audio': False} 
+            'platinum': {'daily_limit': 30, 'question_count': 1, 'has_audio': False} 
         }
 
         current_plan_features = plan_features.get(user_plan, plan_features['free'])
@@ -128,16 +128,17 @@ class DreamInterpretationView(APIView):
 # For audio generation and voice services
 class AudioGenerateView(APIView):
     """
-    An endpoint to generate audio from text, providing interpretation and questions.
+    An endpoint to generate audio from user-provided text.
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
         """
-        Handles POST requests to generate audio and interpretation.
-
-        Requires 'text' and 'user_type' in the request data.
-        'voice_type' is optional.
+        Handles POST requests to generate audio from text.
+        Requires:
+        - 'text': string
+        - 'user_type': 'free' | 'premium' | 'platinum'
+        - 'voice_type': optional, e.g. 'Soothing_female'
         """
         serializer = AudioGenerationSerializer(data=request.data)
         if not serializer.is_valid():
@@ -145,43 +146,37 @@ class AudioGenerateView(APIView):
 
         validated_data = serializer.validated_data
         text = validated_data['text']
-        user_type = validated_data['user_type']
+        user_type = validated_data.get('user_type', 'free')
         voice_type = validated_data.get('voice_type', 'Soothing_female')
         user = request.user
 
-        # Define plan features for different user types
+        # Define plan features (you can extend later)
         plan_features = {
-            'free':     {'question_count': 2, 'has_audio': True},
-            'premium':  {'question_count': 5, 'has_audio': True},
-            'platinum': {'question_count': 7, 'has_audio': True}
+            'free':     {'has_audio': True},
+            'premium':  {'has_audio': True},
+            'platinum': {'has_audio': True},
         }
 
-        current_plan_features = plan_features.get(user_type, plan_features['free'])
-
-        # Generate interpretation and questions
-        interpretation, questions = dream_interpreter.generate_interpretation(
-            user.id, text, current_plan_features['question_count']
-        )
+        # Get user plan feature
+        current_plan = plan_features.get(user_type, plan_features['free'])
 
         audio_url = None
-        # Generate audio if the user's plan has audio features
-        if current_plan_features['has_audio']:
-            audio_response_text = f"{interpretation}\n\nHere are some questions to consider:\n{' '.join(questions)}"
+   
+        if current_plan['has_audio']:
             audio_url = voice_services.text_to_voice_elevenlabs(
-                text=audio_response_text,
+                text=text,
                 user_id=user.id,
                 voice_choice=voice_type
             )
 
-        # Prepare the response data
+      
         response_data = {
             "text": text,
-            "interpretation": interpretation,
-            "questions": questions,
+            "user_type": user_type,
+            "voice_type": voice_type,
             "audio_url": request.build_absolute_uri(audio_url) if audio_url else None
         }
         return Response(response_data, status=status.HTTP_201_CREATED)
-
 
 
 # Types of voice 
