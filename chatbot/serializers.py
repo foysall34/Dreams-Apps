@@ -73,8 +73,24 @@ class PricingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pricing
       
-        fields = ['id', 'user_plan', 'description', 'price', 'features']
+        fields = ['id', 'billing_interval', 'description', 'price', 'features']
 
     def get_features(self, obj):
     
         return obj.get_features()
+    
+
+
+# chatbot/serializers.py
+from rest_framework import serializers
+from .models import Pricing
+
+class PricingMinimalSerializer(serializers.ModelSerializer):
+    features = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Pricing
+        fields = ['id', 'plan_type', 'stripe_price_id', 'price', 'billing_interval' , 'features']
+
+    def get_features(self, obj):
+        return [feature['name'] for feature in obj.get_features()]

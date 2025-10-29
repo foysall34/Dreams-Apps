@@ -75,6 +75,10 @@ STRIPE_PRICE_IDS = {
     'platinum': 'price_1SBqOeCk78tT87fWCSa78vzm', 
 }
 
+CSRF_TRUSTED_ORIGINS = [
+
+    "https://tripersonal-homelessly-felecia.ngrok-free.app"
+]
 
 REST_FRAMEWORK = {
     # ... other settings

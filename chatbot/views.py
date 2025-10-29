@@ -251,52 +251,64 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from .models import Subscription
 from django.urls import reverse
-
 from .models import Subscription
-User = get_user_model()
 
+User = get_user_model()
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
 
 class CreateCheckoutSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
- 
-        subscription_type = request.data.get('subscription_type')
+        pricing_id = request.data.get('pricing_id')
 
-        price_id = settings.STRIPE_PRICE_IDS.get(subscription_type)
-
-   
-        if not price_id:
+        if not pricing_id:
             return Response(
-                {"error": "Invalid or missing subscription_type."},
+                {"error": "pricing_id is required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
+
+            pricing_plan = Pricing.objects.get(id=pricing_id)
+
             success_url = request.build_absolute_uri(reverse('success'))
             cancel_url = request.build_absolute_uri(reverse('cancel'))
 
-            checkout_session = stripe.checkout.Session.create(
-                line_items=[
-                    {
-                        'price': price_id,  
-                        'quantity': 1,
-                    },
-                ],
+            session = stripe.checkout.Session.create(
                 mode='subscription',
+                line_items=[{
+                    "price": pricing_plan.stripe_price_id,
+                    "quantity": 1,
+                }],
+                customer_email=request.user.email,
                 success_url=success_url,
                 cancel_url=cancel_url,
-                customer_email=request.user.email,
+
                 metadata={
-                    'user_id': request.user.id,
-        
-                    'subscription_type': subscription_type
+                    "user_id": request.user.id,
+                    "pricing_id": pricing_plan.id,
+                    "plan_type": pricing_plan.plan_type,
+                    "billing_interval": pricing_plan.billing_interval,
                 }
             )
-            return Response({'sessionId': checkout_session.url})
+
+            return Response({"checkout_url": session.url})
+
+        except Pricing.DoesNotExist:
+            return Response(
+                {"error": "Pricing plan not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 
 
 from django.views.decorators.csrf import csrf_exempt
@@ -304,86 +316,79 @@ from django.utils.decorators import method_decorator
 
 @method_decorator(csrf_exempt, name='dispatch')
 class StripeWebhookView(APIView):
+
     def post(self, request, *args, **kwargs):
+        print("\n--- [Webhook] Request Received ---")
 
-        
-        print("\n--- [Debug] Webhook request received! ---")
-
-        webhook_secret = settings.STRIPE_WEBHOOK_SECRET
         payload = request.body
-        sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
-        event = None
+        sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
+        endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
 
         try:
             event = stripe.Webhook.construct_event(
-                payload, sig_header, webhook_secret
+                payload, sig_header, endpoint_secret
             )
-        except ValueError as e:
-            # --- [Debug 2] ---
-            # If the payload is invalid
-            print(f" [Debug] Invalid Payload! Error: {str(e)}")
-            return Response(status=status.HTTP_400_BAD_REQUEST)
-        except stripe.error.SignatureVerificationError as e:
-            # --- [Debug 3] ---
-            # If the Webhook Secret Key does not match
-            print(f" [Debug] Signature verification failed! Check your STRIPE_WEBHOOK_SECRET. Error: {str(e)}")
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print("[Webhook] ⚠ Error validating event:", e)
+            return Response(status=400)
 
-        # --- [Debug 4] ---
-        # See which type of event was received
-        print(f"✅ [Debug] Event constructed successfully. Type: {event['type']}")
+        event_type = event.get("type")
+        print(f"[Webhook] Event Type: {event_type}")
 
-        if event['type'] == 'checkout.session.completed':
-            print("--- [Debug] Handling 'checkout.session.completed' event ---")
-            session = event['data']['object']
-            
-            metadata = session.get('metadata', {})
-            # --- [Debug 5] ---
-            # Print the entire metadata object to see what's inside
-            print(f"[Debug] Received Metadata: {metadata}")
-            
-            user_id = metadata.get('user_id')
-            print(f"[Debug] Retrieved user_id: {user_id}") # Your previous print
-            
-            subscription_type = metadata.get('subscription_type')
-            print(f"[Debug] Retrieved subscription_type: {subscription_type}") # Your previous print
+    
+        if event_type == "checkout.session.completed":
+            session = event["data"]["object"]
+            metadata = session.get("metadata", {})
+            print(f"[Webhook] Metadata: {metadata}")
 
-            if not user_id or not subscription_type:
-                print("[Debug] user_id or subscription_type not found in metadata.")
-                return Response({"error": "User ID or subscription_type not in session metadata"}, status=status.HTTP_400_BAD_REQUEST)
+            user_id = metadata.get("user_id")
+            pricing_id = metadata.get("pricing_id")
+
+            if not user_id or not pricing_id:
+                print("[Webhook]  Missing required metadata")
+                return Response(status=400)
 
             try:
                 user = User.objects.get(id=user_id)
-                # --- [Debug 6] ---
-                # Confirm that the user was found in the database
-                print(f"✅ [Debug] User '{user.username}' (ID: {user.id}) found in the database.")
             except User.DoesNotExist:
-                # --- [Debug 7] ---
-                # If the user could not be found
-                print(f"[Debug] User with ID: {user_id} was not found in the database.")
-                return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-            
-            # --- [Debug 8] ---
-            # Just before the database operation
-            print("[Debug] Calling Subscription.objects.update_or_create...")
-            
+                print("[Webhook]  User not found in DB")
+                return Response(status=404)
+
+            try:
+                pricing_plan = Pricing.objects.get(id=pricing_id)
+            except Pricing.DoesNotExist:
+                print("[Webhook]  Pricing plan not found in DB")
+                return Response(status=404)
+
+            subscription_id = session.get("subscription")
+            customer_id = session.get("customer")
+
             Subscription.objects.update_or_create(
                 user=user,
                 defaults={
-                    'stripe_customer_id': session.customer,
-                    'stripe_subscription_id': session.subscription,
-                    'plan': subscription_type,  
-                    'is_active': True
+                    "stripe_customer_id": customer_id,
+                    "stripe_subscription_id": subscription_id,
+                    "plan": pricing_plan.plan_type,
+                    "is_active": True,
                 }
             )
-   
 
-            print(f"✅ [Debug] Successfully created/updated plan to '{subscription_type}' for user '{user.username}'.")
+            print(f"[Webhook] Subscription updated for {user.email}: {pricing_plan}")
 
+       
+        elif event_type == "customer.subscription.deleted":
+            subscription_obj = event["data"]["object"]
+            user_email = subscription_obj.get("customer_email")
 
-    
-      
-        return Response(status=status.HTTP_200_OK)
+            try:
+                user = User.objects.get(email=user_email)
+                Subscription.objects.filter(user=user).update(is_active=False)
+                print(f"[Webhook] 🚫 Subscription canceled for {user.email}")
+            except:
+                pass
+
+        return Response(status=200)
+
 
 
 from django.views.generic import TemplateView
@@ -424,3 +429,16 @@ class PricingListAPIView(APIView):
 
 
 
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import Pricing
+from .serializers import PricingMinimalSerializer
+
+
+class PricingMinimalView(APIView):
+    def get(self, request):
+        plans = Pricing.objects.all()
+        serializer = PricingMinimalSerializer(plans, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

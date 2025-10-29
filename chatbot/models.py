@@ -38,6 +38,7 @@ class Subscription(models.Model):
     stripe_subscription_id = models.CharField(max_length=255, blank=True, null=True)
     plan = models.CharField(max_length=10, choices=USER_PLAN_CHOICES, default='free') 
     is_active = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.user.username} - {self.plan}"
@@ -45,47 +46,54 @@ class Subscription(models.Model):
 
 
 
-# your_app_name/models.py
-from django.db import models
 
 class Feature(models.Model):
-    name = models.CharField(max_length=255, unique=True, help_text="Type your feature")
+    name = models.CharField(max_length=255, unique=True)
 
     def __str__(self):
         return self.name
 
+
 class Pricing(models.Model):
- 
-    user_plan = models.CharField(max_length=255, blank=True, null=True)
-    description = models.TextField(max_length=1500)
-    price = models.FloatField()
-    features = models.ManyToManyField(Feature, through='PlanFeature', related_name='plans')
+    PLAN_CHOICES = [
+        ('free' , 'Free'),
+        ('premium', 'Dream Premium'),
+        ('platinum', 'Dream Platinum'),
+    ]
+
+    BILLING_INTERVAL_CHOICES = [
+        ('month', 'Per month'),
+        ('year', 'Per year'),
+        ('2year', 'Every 2 years'),
+    ]
+    stripe_price_id = models.CharField(max_length=255, unique=True , null= True , blank= True)
+    plan_type = models.CharField(max_length=20, choices=PLAN_CHOICES , default='free')
+    price = models.DecimalField(max_digits=6, decimal_places=2)
+    billing_interval = models.CharField(max_length=10, choices=BILLING_INTERVAL_CHOICES , default='month')
+    interval_count = models.PositiveIntegerField(default=1 )  # months or years
+    currency = models.CharField(max_length=10, default="USD")
+    description = models.TextField()
+
+    features = models.ManyToManyField('Feature', through='PlanFeature', related_name='pricing_plans')
 
     def __str__(self):
-        return f"{self.user_plan}"
+        return f"{self.get_plan_type_display()} - {self.price} {self.currency} ({self.get_billing_interval_display()})"
 
     def get_features(self):
-     
-        feature_list = []
+        return [
+            {'name': pf.feature.name, 'enabled': pf.enabled}
+            for pf in self.planfeature_set.select_related('feature')
+        ]
 
-        plan_features = self.planfeature_set.all().select_related('feature')
-
-        for pf in plan_features:
-            feature_list.append({
-                'name': pf.feature.name,
-                'enabled': pf.enabled
-            })
-        return feature_list
 
 class PlanFeature(models.Model):
-  
     pricing_plan = models.ForeignKey(Pricing, on_delete=models.CASCADE)
     feature = models.ForeignKey(Feature, on_delete=models.CASCADE)
-    enabled = models.BooleanField(default=True, help_text="enable or not")
+    enabled = models.BooleanField(default=True)
 
     class Meta:
-
         unique_together = ('pricing_plan', 'feature')
 
     def __str__(self):
-        return f"{self.pricing_plan.user_plan} - {self.feature.name} ({'Enabled' if self.enabled else 'Disabled'})"
+        status = "Enabled" if self.enabled else "Disabled"
+        return f"{self.pricing_plan} - {self.feature.name} ({status})"
