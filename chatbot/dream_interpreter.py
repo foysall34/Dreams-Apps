@@ -1,11 +1,8 @@
-# services/dream_interpreter.py
 
 from openai import OpenAI
 from django.conf import settings
-from .models import Dream # Assuming your Dream model is in the 'services' app or accessible
+from .models import Dream 
 
-# Initialize the OpenAI client for DeepSeek
-# It's best practice to check if the key exists
 if not settings.OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY is not set in Django settings.")
 
@@ -15,25 +12,14 @@ client = OpenAI(
 )
 
 def generate_interpretation(user, dream_text, question_count):
-    """
-    Generates the initial dream interpretation and follow-up questions.
-    
-    Args:
-        user (User): The Django user instance.
-        dream_text (str): The text of the dream to interpret.
-        question_count (int): The number of follow-up questions to generate.
-    
-    Returns:
-        tuple: A tuple containing the interpretation (str) and questions (str).
-    """
-    # Fetch previous dreams for context from the database
-    previous_dreams = Dream.objects.filter(user=user).order_by('-created_at')[:5] # Get last 5 dreams
+
+    previous_dreams = Dream.objects.filter(user=user).order_by('-created_at')[:5]
     
     context_text = ""
     if previous_dreams:
         context_text = "For context, here are the user's previous dreams and interpretations:\n"
         for dream in previous_dreams:
-            if dream.interpretation: # Only include dreams that have been interpreted
+            if dream.interpretation: 
                 context_text += f"- Dream: {dream.text}\n  Interpretation: {dream.interpretation}\n"
 
     system_prompt = f"""
@@ -54,11 +40,10 @@ and whether the user was an observer or participant.
         output_text = response.choices[0].message.content.strip()
         lines = output_text.split("\n")
 
-        # A more robust way to separate interpretation from questions
         interpretation_lines = []
         question_lines = []
         for line in lines:
-            # Simple heuristic: lines starting with a number or question mark are questions
+
             if line.strip().startswith(('?', '1', '2', '3', '4', '5', '6', '7')):
                 question_lines.append(line)
             else:
@@ -67,7 +52,7 @@ and whether the user was an observer or participant.
         interpretation = "\n".join(interpretation_lines).strip()
         questions = "\n".join(question_lines).strip()
 
-        # Fallback if splitting fails to find questions
+
         if not questions and len(lines) > question_count:
             interpretation = "\n".join(lines[:-question_count]).strip()
             questions = "\n".join(lines[-question_count:]).strip()
@@ -75,7 +60,7 @@ and whether the user was an observer or participant.
         return interpretation, questions
 
     except Exception as e:
-        # It's good practice to handle potential API errors
+ 
         print(f"Error calling DeepSeek API: {e}")
         return "Sorry, I was unable to process the interpretation at this moment.", ""
 

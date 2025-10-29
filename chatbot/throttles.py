@@ -1,5 +1,3 @@
-# your_app/throttles.py
-
 from rest_framework.throttling import UserRateThrottle
 from .models import Subscription
 
@@ -16,8 +14,7 @@ class DreamInterpretationRateThrottle(UserRateThrottle):
         if plan == 'premium':
             return '3/day'
         elif plan == 'platinum':
-            # Assuming "up to three" means per day for simplicity here.
-            # You might need more complex logic for consecutive nights.
+          
             return '3/day'
-        else: # Free plan
+        else: 
             return '1/day'

@@ -1,7 +1,3 @@
-
-
-# your_app/views.py
-
 from datetime import datetime, time
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -9,8 +5,6 @@ from rest_framework.response import Response
 from rest_framework import status, generics
 from rest_framework.permissions import IsAuthenticated , AllowAny
 from django.contrib.auth import get_user_model
-
-# Make sure to import your models and services
 from .models import Dream, Subscription  , Pricing
 from .serializers import DreamInterpretationSerializer , DreamHistorySerializer , PricingSerializer , AudioGenerationSerializer
 from .import dream_interpreter, voice_services 
@@ -36,7 +30,7 @@ class DreamInterpretationView(APIView):
         plan_features = {
             'free':     {'daily_limit': 20, 'question_count': 2, 'has_audio': False}, 
             'premium':  {'daily_limit': 30, 'question_count': 5, 'has_audio': False},
-            'platinum': {'daily_limit': 30, 'question_count': 1, 'has_audio': False} 
+            'platinum': {'daily_limit': 30, 'question_count': 7, 'has_audio': False} 
         }
 
         current_plan_features = plan_features.get(user_plan, plan_features['free'])
@@ -150,7 +144,7 @@ class AudioGenerateView(APIView):
         voice_type = validated_data.get('voice_type', 'Soothing_female')
         user = request.user
 
-        # Define plan features (you can extend later)
+   
         plan_features = {
             'free':     {'has_audio': True},
             'premium':  {'has_audio': True},
@@ -184,14 +178,10 @@ class VoiceTypeListView(APIView):
     """
     An endpoint to retrieve a list of all available voice types for audio generation.
     """
-    permission_classes = [AllowAny] # Or AllowAny if you want it to be public
+    permission_classes = [AllowAny] 
 
     def get(self, request, *args, **kwargs):
-        """
-        Handles GET requests to return the list of available voice types.
-        """
-        # You should replace this with your actual list of available voices
-        # from your voice generation service.
+   
         available_voices = [
             'Soothing_female',
             'Calm_male',
@@ -383,7 +373,7 @@ class StripeWebhookView(APIView):
             try:
                 user = User.objects.get(email=user_email)
                 Subscription.objects.filter(user=user).update(is_active=False)
-                print(f"[Webhook] 🚫 Subscription canceled for {user.email}")
+                print(f"[Webhook] Subscription canceled for {user.email}")
             except:
                 pass
 
@@ -415,15 +405,9 @@ from rest_framework.response import Response
 from rest_framework import status
 
 
-
-
-
 class PricingListAPIView(APIView):
- 
     def get(self, request, format=None):
-
-        plans = Pricing.objects.all()
-  
+        plans = Pricing.objects.all()  
         serializer = PricingSerializer(plans, many=True)
         return Response(serializer.data)
 

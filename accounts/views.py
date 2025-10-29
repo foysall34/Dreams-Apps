@@ -206,10 +206,7 @@ def send_otp_via_email(email, otp):
 
 
 class PasswordResetRequestView(generics.GenericAPIView):
-    """
-    API endpoint to request a password reset. 
-    Generates an OTP and sends it to the user's email.
-    """
+   
     serializer_class = PasswordResetRequestSerializer
 
     def post(self, request, *args, **kwargs):
@@ -240,9 +237,7 @@ class PasswordResetRequestView(generics.GenericAPIView):
             )
 
 class ResendOTPViewforPassword(generics.GenericAPIView):
-    """
-    API endpoint to resend OTP for password reset.
-    """
+  
     serializer_class = ResendOTPSerializer
 
     def post(self, request, *args, **kwargs):
@@ -273,9 +268,7 @@ class ResendOTPViewforPassword(generics.GenericAPIView):
             )
 
 class PasswordResetConfirmView(generics.GenericAPIView):
-    """
-    API endpoint to confirm password reset with OTP and new password.
-    """
+   
     serializer_class = PasswordResetConfirmSerializer
 
     def post(self, request, *args, **kwargs):

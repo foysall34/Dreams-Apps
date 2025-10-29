@@ -61,7 +61,7 @@ class DreamHistorySerializer(serializers.ModelSerializer):
             'created_at'
         )
 
-# your_app_name/serializers.py
+
 
 from rest_framework import serializers
 from .models import Pricing
@@ -73,7 +73,7 @@ class PricingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pricing
       
-        fields = ['id', 'billing_interval', 'description', 'price', 'features']
+        fields = ['id', 'plan_type', 'billing_interval', 'description', 'price', 'features']
 
     def get_features(self, obj):
     
@@ -81,7 +81,6 @@ class PricingSerializer(serializers.ModelSerializer):
     
 
 
-# chatbot/serializers.py
 from rest_framework import serializers
 from .models import Pricing
 
