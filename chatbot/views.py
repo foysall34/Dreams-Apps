@@ -403,15 +403,26 @@ class CancelView(TemplateView):
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework import generics
+from .models import Pricing
+from .serializers import PricingSerializer
 
+class PricingListView(APIView):
+    def get(self, request):
 
-class PricingListAPIView(APIView):
-    def get(self, request, format=None):
-        plans = Pricing.objects.all()  
-        serializer = PricingSerializer(plans, many=True)
+        plan_order = {"free": 1, "premium": 2, "platinum": 3}
+        billing_order = {"month": 1, "year": 2, "2year": 3}
+        queryset = Pricing.objects.all()
+        sorted_queryset = sorted(
+            queryset,
+            key=lambda x: (
+                plan_order.get(x.plan_type, 99),
+                billing_order.get(x.billing_interval, 99)
+            )
+        )
+
+        serializer = PricingSerializer(sorted_queryset, many=True)
         return Response(serializer.data)
-
-
 
 
 from rest_framework.views import APIView

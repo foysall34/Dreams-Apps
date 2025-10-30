@@ -1,5 +1,3 @@
-
-
 from django.db import models
 from django.conf import settings
 
@@ -84,6 +82,10 @@ class Pricing(models.Model):
             {'name': pf.feature.name, 'enabled': pf.enabled}
             for pf in self.planfeature_set.select_related('feature')
         ]
+
+
+
+
 
 
 class PlanFeature(models.Model):

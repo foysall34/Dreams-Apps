@@ -1,12 +1,12 @@
 from django.urls import path
 
-from .views import  PricingMinimalView,VoiceTypeListView,AudioGenerateView,PricingListAPIView,DreamInterpretationView, DreamHistoryView , DreamDetailView , CreateCheckoutSessionView , StripeWebhookView , SuccessView , CancelView
+from .views import  PricingMinimalView,VoiceTypeListView,AudioGenerateView,PricingListView,DreamInterpretationView, DreamHistoryView , DreamDetailView , CreateCheckoutSessionView , StripeWebhookView , SuccessView , CancelView
 
 
 
 
 urlpatterns = [
-  path('pricing/', PricingListAPIView.as_view(), name='pricing-list'),
+  path('pricing/', PricingListView.as_view(), name='pricing-list'),
   path('dream/' , DreamInterpretationView.as_view() , name= "done"),
   path('history/', DreamHistoryView.as_view(), name='dream-history'),
   path('history/<int:pk>/', DreamDetailView.as_view(), name='dream-detail'),
